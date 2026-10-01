@@ -37,6 +37,7 @@ function load() {
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch { /* corrupt or blocked: reseed */ }
   if (!s || s.version !== 1) s = seed();
   s.library[s.session.userId] ??= {};
+  s.messages ??= [];
   migrateLegacy(s);
   return s;
 }
@@ -148,6 +149,16 @@ export async function refresh(force = false) {
 }
 
 export const signOut = () => remote.signOut();
+
+/** Fetches just your messages (cheap enough to poll while a conversation is open). */
+export async function refreshMessages() {
+  if (!state?.online || saving) return;
+  const v = version;
+  try {
+    const messages = await remote.loadMessages();
+    if (version === v && state && JSON.stringify(messages) !== JSON.stringify(state.messages)) { state = { ...state, messages }; notify(); }
+  } catch { /* try again on the next tick */ }
+}
 export const backend = remote;
 
 export const getState = () => state;
@@ -296,6 +307,18 @@ export function addComment(reviewId, body) {
   mutate((s, uid) => {
     s.reviews.find(x => x.id === reviewId).comments.push({ id: newId('c'), userId: uid, body, createdAt: Date.now() });
   });
+}
+
+// ---------- direct messages ----------
+export const unreadCount = () => (state?.messages || []).filter(m => m.to === meId() && !m.readAt).length;
+
+export function sendMessage(to, body) {
+  mutate((s, uid) => { s.messages.push({ id: newId('m'), from: uid, to, body, at: Date.now(), readAt: null }); });
+}
+
+export function markRead(other) {
+  if (!state.messages.some(m => m.from === other && m.to === meId() && !m.readAt)) return;
+  mutate((s, uid) => { for (const m of s.messages) if (m.from === other && m.to === uid && !m.readAt) m.readAt = Date.now(); });
 }
 
 // ---------- social ----------

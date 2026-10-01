@@ -164,3 +164,50 @@ language sql security definer set search_path = public stable as $$
 $$;
 revoke execute on function public.username_available(text) from public;
 grant execute on function public.username_available(text) to anon, authenticated;
+
+-- ---------- direct messages ----------
+create table public.messages (
+  id text primary key check (char_length(id) <= 64),
+  sender_id uuid not null default auth.uid() references public.profiles on delete cascade,
+  recipient_id uuid not null references public.profiles on delete cascade,
+  body text not null check (char_length(body) between 1 and 2000),
+  created_at bigint not null,
+  read_at bigint,
+  check (sender_id <> recipient_id)
+);
+create index messages_recipient on public.messages (recipient_id, created_at);
+create index messages_sender on public.messages (sender_id, created_at);
+alter table public.messages enable row level security;
+-- Only the two people in a conversation can read it; you can only send as yourself.
+-- No update policy: read receipts go through mark_read() so nobody can edit a message.
+create policy "messages: participants read" on public.messages for select to authenticated using (auth.uid() in (sender_id, recipient_id));
+create policy "messages: send as yourself" on public.messages for insert to authenticated with check (sender_id = auth.uid() and read_at is null);
+create policy "messages: sender deletes" on public.messages for delete to authenticated using (sender_id = auth.uid());
+
+create function public.mark_read(other uuid) returns void
+language sql security definer set search_path = public as $$
+  update public.messages set read_at = (extract(epoch from now()) * 1000)::bigint
+  where recipient_id = auth.uid() and sender_id = other and read_at is null;
+$$;
+revoke execute on function public.mark_read(uuid) from public;
+grant execute on function public.mark_read(uuid) to authenticated;
+
+-- ---------- AI assistant: daily limit per person ----------
+-- The assistant runs on your Anthropic API key, and anyone can sign up, so each person
+-- gets a fixed number of questions per day. Change 30 to taste.
+create table public.assistant_usage (
+  user_id uuid not null references public.profiles on delete cascade,
+  day date not null,
+  count int not null default 0,
+  primary key (user_id, day)
+);
+alter table public.assistant_usage enable row level security;   -- no policies: only the function below touches it
+
+create function public.use_assistant_quota() returns boolean
+language sql security definer set search_path = public as $$
+  insert into public.assistant_usage as u (user_id, day, count) values (auth.uid(), current_date, 1)
+  on conflict (user_id, day) do update set count = u.count + 1
+  returning count <= 30;
+$$;
+revoke execute on function public.use_assistant_quota() from public;
+grant execute on function public.use_assistant_quota() to authenticated;

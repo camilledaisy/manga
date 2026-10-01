@@ -37,7 +37,7 @@ export function Profile({ username, tab = 'activity' }) {
       <div class="profile-actions">
         ${mine ? html`<div class="row"><button class="btn" onClick=${() => openModal('profile')}><${Icon} name="edit" size=${16} /> Edit profile</button>
             ${db.online && html`<${InviteButton} user=${u} />`}</div>`
-          : html`<${FollowButton} user=${u} />`}
+          : html`<div class="row"><${FollowButton} user=${u} /><a class="btn" href=${'#/messages/' + encodeURIComponent(u.username)}><${Icon} name="comment" size=${16} /> Message</a></div>`}
       </div>
     </header>
 

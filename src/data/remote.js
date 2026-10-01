@@ -50,10 +50,10 @@ export async function signUp({ email, password, username, name }) {
 export async function loadAll(user) {
   const c = await client();
   const q = (t, f = x => x) => f(c.from(t).select('*')).then(ok);
-  const [profiles, entries, notes, reviews, likes, comments, follows, lists, activity, cache] = await Promise.all([
+  const [profiles, entries, notes, reviews, likes, comments, follows, lists, activity, cache, messages] = await Promise.all([
     q('profiles'), q('library_entries'), q('private_notes'), q('reviews'), q('review_likes'),
     q('review_comments', x => x.order('created_at')), q('follows'), q('lists', x => x.order('updated_at', { ascending: false })),
-    q('activity', x => x.order('at', { ascending: false }).limit(1000)), q('manga_cache'),
+    q('activity', x => x.order('at', { ascending: false }).limit(1000)), q('manga_cache'), loadMessages(),
   ]);
   for (const row of cache) {
     const m = row.data;
@@ -89,7 +89,41 @@ export async function loadAll(user) {
     lists: lists.map(l => ({ id: l.id, userId: l.user_id, title: l.title, description: l.description, public: l.public, mangaIds: l.manga_ids,
       createdAt: l.created_at, updatedAt: l.updated_at })),
     activity: activity.map(a => ({ id: a.id, userId: a.user_id, type: a.type, mangaId: a.manga_id ?? undefined, at: a.at, ...a.data })),
+    messages,
   };
+}
+
+/** Your conversations only: row-level security returns messages you sent or received. */
+export async function loadMessages() {
+  const rows = ok(await (await client()).from('messages').select('*').order('created_at'));
+  return rows.map(m => ({ id: m.id, from: m.sender_id, to: m.recipient_id, body: m.body, at: m.created_at, readAt: m.read_at }));
+}
+
+/** Streams the assistant's answer; calls onText with the text so far. */
+export async function ask(messages, context, onText) {
+  const s = await session();
+  let r;
+  try {
+    r = await fetch(`${SUPABASE_URL}/functions/v1/assistant`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${s?.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, context }),
+    });
+  } catch { throw new Error('Could not reach the assistant. Check your connection.'); }
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new Error(j.error || (r.status === 404 ? "The assistant isn't deployed yet (see README → Turn on the AI assistant)." : `The assistant returned an error (${r.status}).`));
+  }
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += dec.decode(value, { stream: true });
+    onText(text);
+  }
+  return text;
 }
 
 // ---------- save: diff the state before and after an action, write what changed ----------
@@ -165,6 +199,14 @@ export async function push(prev, next) {
     await run(c.from('lists').upsert({ id, user_id: uid, title: l.title, description: l.description, public: l.public, manga_ids: l.mangaIds, created_at: l.createdAt, updated_at: l.updatedAt }));
   }
   for (const id of myLists.removed) await run(c.from('lists').delete().eq('id', id));
+
+  const sentBefore = new Set(prev.messages.map(m => m.id));
+  for (const m of next.messages) if (m.from === uid && !sentBefore.has(m.id)) {
+    await run(c.from('messages').insert({ id: m.id, sender_id: uid, recipient_id: m.to, body: m.body, created_at: m.at }));
+  }
+  const unreadBefore = new Set(prev.messages.filter(m => m.to === uid && !m.readAt).map(m => m.id));
+  const nowRead = new Set(next.messages.filter(m => unreadBefore.has(m.id) && m.readAt).map(m => m.from));
+  for (const other of nowRead) await run(c.rpc('mark_read', { other }));
 
   const act = diff(byId(prev.activity.filter(a => a.userId === uid)), byId(next.activity.filter(a => a.userId === uid)));
   for (const id of act.changed) {

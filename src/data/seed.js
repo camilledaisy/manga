@@ -118,6 +118,15 @@ const LISTS = [
   ['u_hana', 'Food Is Love', 'Manga that will make you hungry.', true, ['dungeon-meshi', 'skip-and-loafer', 'march-comes-in'], 50],
 ];
 
+// [from, to, minutesAgo, body, unread]
+const MESSAGES = [
+  ['u_mika', 'u_daisy', 2900, 'Okay I finally started Paradise Kiss because of your review. George is SO annoying', false],
+  ['u_daisy', 'u_mika', 2880, 'He is!! That\'s the point. Wait until the ending', false],
+  ['u_mika', 'u_daisy', 2875, 'No spoilers!!', false],
+  ['u_kenji', 'u_daisy', 95, 'You\'re at chapter 212 of Vagabond? The next arc is the best part. The rice fields. Trust me.', true],
+  ['u_kenji', 'u_daisy', 94, 'Also you need to start Berserk. It\'s been on your list for 40 days.', true],
+];
+
 export function seed(now = Date.now()) {
   const rand = rng(20261001);
   const ago = (d) => Math.round(now - d * DAY);
@@ -167,6 +176,9 @@ export function seed(now = Date.now()) {
     return { id: listId, userId, title, description, public: isPublic, mangaIds, createdAt: ago(daysAgo), updatedAt: ago(daysAgo) };
   });
 
+  const messages = MESSAGES.map(([from, to, minutesAgo, body, unread]) => ({ id: id('m'), from, to, body, at: Math.round(now - minutesAgo * 6e4),
+    readAt: unread ? null : Math.round(now - minutesAgo * 6e4 + 6e4) }));
+
   activity.sort((a, b) => b.at - a.at);
-  return { version: 1, session: { userId: 'u_daisy' }, users, follows: FOLLOWS, library, reviews, lists, activity };
+  return { version: 1, session: { userId: 'u_daisy' }, users, follows: FOLLOWS, library, reviews, lists, activity, messages };
 }
