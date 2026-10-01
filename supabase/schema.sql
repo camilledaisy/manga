@@ -192,22 +192,3 @@ $$;
 revoke execute on function public.mark_read(uuid) from public;
 grant execute on function public.mark_read(uuid) to authenticated;
 
--- ---------- AI assistant: daily limit per person ----------
--- The assistant runs on your Anthropic API key, and anyone can sign up, so each person
--- gets a fixed number of questions per day. Change 30 to taste.
-create table public.assistant_usage (
-  user_id uuid not null references public.profiles on delete cascade,
-  day date not null,
-  count int not null default 0,
-  primary key (user_id, day)
-);
-alter table public.assistant_usage enable row level security;   -- no policies: only the function below touches it
-
-create function public.use_assistant_quota() returns boolean
-language sql security definer set search_path = public as $$
-  insert into public.assistant_usage as u (user_id, day, count) values (auth.uid(), current_date, 1)
-  on conflict (user_id, day) do update set count = u.count + 1
-  returning count <= 30;
-$$;
-revoke execute on function public.use_assistant_quota() from public;
-grant execute on function public.use_assistant_quota() to authenticated;

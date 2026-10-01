@@ -648,16 +648,3 @@ dialog[open] { animation: rise .2s ease-out; }
 .dm-compose { display: flex; gap: 8px; align-items: flex-end; padding: 10px; border-top: 1px solid var(--line); }
 .dm-compose textarea { flex: 1; resize: none; max-height: 140px; field-sizing: content; min-height: 40px; }
 .dm-compose .btn { height: 40px; }
-
-/* ---------- assistant ---------- */
-.chat { display: flex; flex-direction: column; gap: 10px; margin: 24px 0 0; min-height: 30vh; }
-.bubble.ai { max-width: min(92%, 720px); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--hanko); }
-.suggestions .chip { white-space: normal; text-align: left; padding: 8px 14px; }
-.chat-compose { position: sticky; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); margin-top: 16px; background: var(--surface);
-  border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
-@media (min-width: 1180px) { .chat-compose { bottom: 16px; } }
-.chat-note { margin-top: 10px; }
-.typing { display: inline-flex; gap: 4px; padding: 4px 0; }
-.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
-.typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
-@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }

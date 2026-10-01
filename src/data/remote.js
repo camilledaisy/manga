@@ -99,33 +99,6 @@ export async function loadMessages() {
   return rows.map(m => ({ id: m.id, from: m.sender_id, to: m.recipient_id, body: m.body, at: m.created_at, readAt: m.read_at }));
 }
 
-/** Streams the assistant's answer; calls onText with the text so far. */
-export async function ask(messages, context, onText) {
-  const s = await session();
-  let r;
-  try {
-    r = await fetch(`${SUPABASE_URL}/functions/v1/assistant`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${s?.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, context }),
-    });
-  } catch { throw new Error("Could not reach the assistant. If it isn't set up yet, follow README → Turn on the AI assistant; otherwise check your connection."); }
-  if (!r.ok) {
-    const j = await r.json().catch(() => ({}));
-    throw new Error(j.error || (r.status === 404 ? "The assistant isn't deployed yet (see README → Turn on the AI assistant)." : `The assistant returned an error (${r.status}).`));
-  }
-  const reader = r.body.getReader();
-  const dec = new TextDecoder();
-  let text = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    text += dec.decode(value, { stream: true });
-    onText(text);
-  }
-  return text;
-}
-
 // ---------- save: diff the state before and after an action, write what changed ----------
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function diff(prev = {}, next = {}) {

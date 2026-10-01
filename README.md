@@ -24,8 +24,6 @@ src/config.js                 Supabase URL + key; empty = local demo
 supabase/schema.sql           database tables and row-level security (run once in Supabase)
 src/pages/auth.js             sign in, sign up, password reset
 src/pages/messages.js         direct messages
-src/pages/assistant.js        AI assistant chat
-supabase/functions/assistant  Edge Function that calls Claude with the reader's shelf
 src/data/selectors.js         derived views: feeds, recommendations, stats
 ```
 
@@ -48,17 +46,7 @@ Both values in `config.js` are designed to be public. What each person can read 
 
 Supabase's built-in email sender only allows a few emails per hour. That's fine for a handful of friends; for more, connect your own SMTP under Authentication → Emails, or turn off **Confirm email** under Authentication → Sign In / Providers → Email.
 
-## Turn on the AI assistant
-
-The assistant (sparkle icon) answers questions about manga and your shelf using Claude. It runs as a Supabase Edge Function, so your Anthropic API key stays on the server. It needs accounts turned on first.
-
-1. Create an API key at [console.anthropic.com](https://console.anthropic.com).
-2. In Supabase, open **Edge Functions → Secrets** and add `ANTHROPIC_API_KEY` with that key.
-3. Deploy `supabase/functions/assistant/index.ts` as a function named `assistant`. You can do this in the dashboard (**Edge Functions → Deploy a new function → Via editor**, paste the file, name it `assistant`), or with the CLI: `supabase functions deploy assistant`.
-
-Each question sends your shelf summary plus the conversation to Claude Opus 5.5 ($4 / $20 per million input/output tokens), which comes to a few cents per question. Every account gets 30 questions per day; change the number in `use_assistant_quota()` in `supabase/schema.sql`.
-
-**Already ran `schema.sql` before messages and the assistant existed?** Run just its last two sections (from `-- ---------- direct messages` to the end) in the SQL Editor.
+**Already ran `schema.sql` before direct messages existed?** Run just its last section (from `-- ---------- direct messages` to the end) in the SQL Editor.
 
 ## How data flows
 

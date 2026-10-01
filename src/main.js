@@ -15,7 +15,6 @@ import { Stats } from './pages/stats.js';
 import { Profile } from './pages/profile.js';
 import { AuthScreen } from './pages/auth.js';
 import { Messages } from './pages/messages.js';
-import { Assistant } from './pages/assistant.js';
 
 const NAV = [
   ['', 'Home', 'home'], ['discover', 'Discover', 'compass'], ['library', 'My Library', 'books'], ['lists', 'Lists', 'list'],
@@ -34,7 +33,6 @@ function page({ parts: [root, a, b], query }) {
     case 'profile': return html`<${Profile} tab=${a} />`;
     case 'user': return html`<${Profile} username=${a} tab=${b} />`;
     case 'messages': return html`<${Messages} username=${a} />`;
-    case 'assistant': return html`<${Assistant} />`;
     default: return html`<div class="page"><${EmptyState} title="Page not found" action=${html`<a class="btn" href="#/">Go home</a>`} /></div>`;
   }
 }
@@ -104,7 +102,6 @@ function App() {
         <div class=${'topbar-search' + (searchOpen ? ' open' : '')}><${SearchBar} autoFocus=${searchOpen} onDone=${() => setSearchOpen(false)} /></div>
         <button class="btn icon-btn ghost search-toggle" aria-label=${searchOpen ? 'Close search' : 'Search'} onClick=${() => setSearchOpen(!searchOpen)}>
           <${Icon} name=${searchOpen ? 'x' : 'search'} /></button>
-        <a class=${'btn icon-btn ghost' + (root === 'assistant' ? ' current' : '')} href="#/assistant" aria-label="Ask the assistant" title="Ask the assistant"><${Icon} name="sparkle" /></a>
         <a class=${'btn icon-btn ghost badge-host' + (root === 'messages' ? ' current' : '')} href="#/messages" title="Messages"
           aria-label=${db.unreadCount() ? `Messages, ${db.unreadCount()} unread` : 'Messages'}><${Icon} name="comment" />
           ${db.unreadCount() > 0 && html`<span class="badge dot" aria-hidden="true">${db.unreadCount()}</span>`}</a>
