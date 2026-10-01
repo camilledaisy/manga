@@ -109,7 +109,7 @@ export async function ask(messages, context, onText) {
       headers: { Authorization: `Bearer ${s?.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages, context }),
     });
-  } catch { throw new Error('Could not reach the assistant. Check your connection.'); }
+  } catch { throw new Error("Could not reach the assistant. If it isn't set up yet, follow README → Turn on the AI assistant; otherwise check your connection."); }
   if (!r.ok) {
     const j = await r.json().catch(() => ({}));
     throw new Error(j.error || (r.status === 404 ? "The assistant isn't deployed yet (see README → Turn on the AI assistant)." : `The assistant returned an error (${r.status}).`));

@@ -30,7 +30,9 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return fail(405, "Use POST.");
 
   // Who is asking: a signed-in Manga Shelf user.
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+  // Newer projects may not inject the legacy anon key; the browser's public key works the same way.
+  const publicKey = Deno.env.get("SUPABASE_ANON_KEY") || req.headers.get("apikey") || "";
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, publicKey, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
   });
   const { data: { user } } = await supabase.auth.getUser();
