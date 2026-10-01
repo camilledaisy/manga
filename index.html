@@ -4,53 +4,145 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Manga Shelf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
 <style>
-  :root { --bg:#f6f6f8; --card:#fff; --fg:#1b1b1f; --muted:#6b6b76; --line:#e2e2e8; --accent:#3b6cf6; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#121216; --card:#1c1c22; --fg:#ececf1; --muted:#9a9aa6; --line:#2c2c35; --accent:#7a9cff; }
+  /* Layout: a halftone masthead, then a cover-first shelf of inked panels, like a manga page. */
+  :root {
+    --paper:#f4f4f1; --panel:#fff; --ink:#17171c; --muted:#6a6a74; --tone:#c4c4cc; --accent:#e0336a; --on-accent:#fff;
+    --reading:#e0336a; --planning:#4a6cd4; --completed:#1f9d63; --paused:#d08a12; --dropped:#8a8a94;
+    --display:'Dela Gothic One', 'Arial Black', system-ui, sans-serif;
+    --body:'Zen Kaku Gothic New', system-ui, sans-serif;
   }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#101014; --panel:#1a1a20; --ink:#f0f0f3; --muted:#9d9daa; --tone:#2c2c35; --accent:#ff5a8e; --on-accent:#16070c;
+      --reading:#ff5a8e; --planning:#7d98ff; --completed:#3ccf8a; --paused:#f0aa3a; --dropped:#9a9aa6; color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#101014; --panel:#1a1a20; --ink:#f0f0f3; --muted:#9d9daa; --tone:#2c2c35; --accent:#ff5a8e; --on-accent:#16070c;
+    --reading:#ff5a8e; --planning:#7d98ff; --completed:#3ccf8a; --paused:#f0aa3a; --dropped:#9a9aa6; color-scheme:dark;
+  }
+
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.4 system-ui, sans-serif; }
-  main { max-width:960px; margin:0 auto; padding:16px; }
-  h1 { margin:0 0 12px; font-size:22px; }
-  input, select, button, textarea { font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
-  button { cursor:pointer; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-  form.search { display:flex; gap:8px; margin-bottom:12px; }
-  form.search input { flex:1; min-width:0; }
-  nav { display:flex; flex-wrap:wrap; gap:6px; margin:16px 0 8px; }
-  nav button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .stats { color:var(--muted); font-size:13px; margin-bottom:12px; }
-  .grid { display:grid; gap:10px; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); }
-  .item { display:flex; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px; }
-  .item img { width:64px; height:92px; object-fit:cover; border-radius:4px; flex:none; background:var(--line); }
-  .item .body { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
-  .item .title { font-weight:600; overflow-wrap:anywhere; }
-  .item .meta { color:var(--muted); font-size:13px; }
-  .row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
-  .row input[type=number] { width:70px; }
-  textarea { width:100%; min-height:50px; resize:vertical; }
-  .empty { color:var(--muted); padding:24px 0; }
-  footer { margin-top:24px; display:flex; gap:8px; flex-wrap:wrap; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.5 var(--body); }
+  main, .wrap { max-width:1080px; margin:0 auto; padding:0 16px 48px; }
+  .wrap { padding-bottom:0; }
+  img { max-width:100%; }
+  :focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+
+  /* Masthead */
+  header { position:relative; isolation:isolate; padding-block:40px 28px; }
+  header::before {
+    content:''; position:absolute; inset:0; z-index:-1;
+    background:radial-gradient(var(--tone) 1.2px, transparent 1.6px) 0 0/9px 9px;
+    -webkit-mask-image:linear-gradient(to bottom, #000 30%, transparent);
+            mask-image:linear-gradient(to bottom, #000 30%, transparent);
+  }
+  h1 { margin:0; font:400 clamp(36px, 8vw, 64px)/1 var(--display); letter-spacing:-.01em; text-wrap:balance; }
+  h1 span { color:var(--accent); }
+  .tagline { margin:8px 0 22px; color:var(--muted); }
+
+  /* Controls */
+  input, select, button, textarea { font:inherit; color:var(--ink); }
+  input, select, textarea { background:var(--panel); border:2px solid var(--ink); border-radius:6px; padding:7px 10px; }
+  button { cursor:pointer; background:var(--panel); border:2px solid var(--ink); border-radius:6px; padding:6px 12px; font-weight:700; }
+  button:hover { background:var(--paper); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  button.primary:hover { filter:brightness(1.08); }
+  button.ghost { border-color:transparent; background:none; color:var(--muted); font-weight:500; }
+
+  form.search { display:flex; max-width:640px; box-shadow:5px 5px 0 var(--ink); border-radius:8px; }
+  form.search input { flex:1; min-width:0; border-radius:8px 0 0 8px; padding:12px 14px; font-size:16px; }
+  form.search button { border-radius:0 8px 8px 0; border-left:0; padding:0 20px; }
+
+  h2 { font:400 20px/1.2 var(--display); margin:0; }
+  .section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:32px 0 14px; flex-wrap:wrap; }
+
+  /* Stats */
+  .stats { display:flex; flex-wrap:wrap; gap:8px 28px; margin-top:26px; }
+  .stat b { display:block; font:400 26px/1.1 var(--display); font-variant-numeric:tabular-nums; }
+  .stat small { color:var(--muted); font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+
+  /* Tabs */
+  nav { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:18px; }
+  nav button { white-space:nowrap; border-radius:999px; font-weight:500; }
+  nav button[aria-pressed="true"] { background:var(--ink); color:var(--paper); }
+  nav button .n { opacity:.6; font-variant-numeric:tabular-nums; margin-left:4px; }
+
+  /* Cover grid */
+  .grid { display:grid; gap:22px 16px; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); }
+  .card { display:flex; flex-direction:column; gap:8px; min-width:0; }
+  .cover {
+    position:relative; aspect-ratio:2/3; border:2px solid var(--ink); border-radius:6px; overflow:hidden;
+    background:radial-gradient(var(--tone) 1.2px, transparent 1.6px) 0 0/7px 7px, var(--panel);
+    box-shadow:4px 4px 0 var(--ink); transition:transform .15s, box-shadow .15s;
+  }
+  .card:hover .cover { transform:translate(-2px, -2px); box-shadow:6px 6px 0 var(--ink); }
+  .cover img { width:100%; height:100%; object-fit:cover; display:block; }
+  .cover .initial { position:absolute; inset:0; display:grid; place-items:center; font:400 48px var(--display); color:var(--muted); }
+  .bar { position:absolute; left:0; right:0; bottom:0; height:6px; background:rgb(0 0 0 / .45); }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .chip {
+    position:absolute; top:8px; left:8px; display:inline-flex; align-items:center; gap:5px;
+    background:var(--panel); border:1.5px solid var(--ink); border-radius:999px; padding:1px 8px 1px 6px; font-size:11px; font-weight:700;
+  }
+  .chip::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--c); }
+  .title { font-weight:700; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+  .meta { color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums; }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .row .grow { flex:1; }
+
+  details.edit summary { list-style:none; cursor:pointer; color:var(--muted); font-size:13px; font-weight:500; }
+  details.edit summary::-webkit-details-marker { display:none; }
+  details.edit summary::after { content:' ▾'; }
+  details.edit[open] summary::after { content:' ▴'; }
+  .edit-body { display:grid; gap:8px; margin-top:8px; padding:10px; background:var(--panel); border:2px solid var(--ink); border-radius:6px; }
+  .edit-body label { display:grid; gap:2px; font-size:12px; color:var(--muted); }
+  .edit-body select, .edit-body input, .edit-body textarea { width:100%; padding:5px 8px; font-size:14px; }
+  textarea { min-height:60px; resize:vertical; }
+  .danger { color:var(--reading); border-color:currentColor; }
+
+  .empty { grid-column:1/-1; padding:32px; text-align:center; color:var(--muted); border:2px dashed var(--tone); border-radius:8px; }
+  footer { margin-top:48px; padding-top:16px; border-top:2px solid var(--ink); display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  footer .meta { margin-right:auto; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
 </style>
 </head>
 <body>
+<header><div class="wrap">
+    <h1>Manga <span>Shelf</span></h1>
+    <p class="tagline">Track what you're reading, chapter by chapter.</p>
+    <form class="search" id="searchForm" role="search">
+      <input id="q" type="search" placeholder="Search manga, e.g. Frieren" aria-label="Search manga" autocomplete="off">
+      <button class="primary">Search</button>
+    </form>
+    <div class="stats" id="stats"></div>
+</div></header>
 <main>
-  <h1>Manga Shelf</h1>
 
-  <form class="search" id="searchForm">
-    <input id="q" type="search" placeholder="Search manga on AniList…" aria-label="Search manga">
-    <button class="primary">Search</button>
-  </form>
-  <div id="results" class="grid"></div>
+  <section id="resultsSection" hidden>
+    <div class="section-head">
+      <h2 id="resultsTitle">Results</h2>
+      <button class="ghost" id="clearResults">Close results ✕</button>
+    </div>
+    <div id="results" class="grid"></div>
+  </section>
 
-  <nav id="tabs" aria-label="Filter by status"></nav>
-  <div class="stats" id="stats"></div>
-  <div id="library" class="grid"></div>
+  <section>
+    <div class="section-head"><h2>My shelf</h2></div>
+    <nav id="tabs" aria-label="Filter by status"></nav>
+    <div id="library" class="grid"></div>
+  </section>
 
   <footer>
-    <button id="exportBtn">Export JSON</button>
-    <label><button type="button" onclick="this.nextElementSibling.click()">Import JSON</button><input id="importFile" type="file" accept="application/json" hidden></label>
+    <span class="meta">Saved in this browser. Back it up now and then.</span>
+    <button id="exportBtn">Export</button>
+    <button type="button" onclick="document.getElementById('importFile').click()">Import</button>
+    <input id="importFile" type="file" accept="application/json" hidden>
   </footer>
 </main>
 
@@ -67,56 +159,62 @@ function save() {
   try { localStorage.setItem(KEY, JSON.stringify(lib)); } catch (e) { alert('Could not save: ' + e.message); }
   render();
 }
+const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const statusOpts = cur => Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${v}</option>`).join('');
+const cover = (src, title, extra = '') => `<div class="cover">${src
+  ? `<img src="${esc(src)}" alt="" loading="lazy">`
+  : `<span class="initial">${esc(title.trim()[0] || '?')}</span>`}${extra}</div>`;
+const chip = s => `<span class="chip" style="--c:var(--${s})">${STATUSES[s]}</span>`;
 
 // --- AniList search ---
 const QUERY = `query($q:String){Page(perPage:20){media(search:$q,type:MANGA,sort:SEARCH_MATCH){
-  id title{romaji english} coverImage{medium} chapters startDate{year} status }}}`;
+  id title{romaji english} coverImage{large} chapters startDate{year} }}}`;
 let results = [];
 
-document.getElementById('searchForm').onsubmit = async e => {
+$('searchForm').onsubmit = async e => {
   e.preventDefault();
-  const q = document.getElementById('q').value.trim();
-  const box = document.getElementById('results');
-  if (!q) { results = []; box.innerHTML = ''; return; }
-  box.innerHTML = '<div class="empty">Searching…</div>';
+  const q = $('q').value.trim();
+  if (!q) return closeResults();
+  $('resultsSection').hidden = false;
+  $('resultsTitle').textContent = `Results for “${q}”`;
+  $('results').innerHTML = '<div class="empty">Searching AniList…</div>';
   try {
     const r = await fetch('https://graphql.anilist.co', {
       method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query: QUERY, variables: { q } }),
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw new Error('AniList returned HTTP ' + r.status);
     results = (await r.json()).data.Page.media;
     renderResults();
   } catch (err) {
-    box.innerHTML = `<div class="empty">Search failed: ${esc(err.message)}</div>`;
+    $('results').innerHTML = `<div class="empty">Search failed: ${esc(err.message)}. Check your connection and try again.</div>`;
   }
 };
+function closeResults() { results = []; $('resultsSection').hidden = true; $('q').value = ''; }
+$('clearResults').onclick = closeResults;
 
+const titleOf = m => m.title.english || m.title.romaji;
 function renderResults() {
-  const box = document.getElementById('results');
-  box.innerHTML = results.length ? results.map(m => `
-    <div class="item">
-      <img src="${esc(m.coverImage?.medium)}" alt="" loading="lazy">
-      <div class="body">
-        <div class="title">${esc(m.title.english || m.title.romaji)}</div>
-        <div class="meta">${esc(m.startDate?.year || '?')} · ${m.chapters ? m.chapters + ' ch' : 'ongoing'}</div>
-        <div class="row">${lib[m.id]
-          ? `<span class="meta">On your shelf: ${STATUSES[lib[m.id].status]}</span>`
-          : `<select aria-label="Status">${statusOpts('planning')}</select>
-             <button class="primary" data-add="${m.id}">Add</button>`}
-        </div>
-      </div>
-    </div>`).join('') : '<div class="empty">No results.</div>';
+  $('results').innerHTML = results.length ? results.map(m => `
+    <div class="card">
+      ${cover(m.coverImage?.large, titleOf(m), lib[m.id] ? chip(lib[m.id].status) : '')}
+      <div class="title">${esc(titleOf(m))}</div>
+      <div class="meta">${esc(m.startDate?.year || '?')} · ${m.chapters ? m.chapters + ' chapters' : 'Ongoing'}</div>
+      ${lib[m.id] ? '<div class="meta">On your shelf</div>' : `
+      <div class="row">
+        <select aria-label="Add as" class="grow">${statusOpts('planning')}</select>
+        <button class="primary" data-add="${m.id}">Add</button>
+      </div>`}
+    </div>`).join('') : '<div class="empty">No manga found. Try a different spelling or the Japanese title.</div>';
 }
 
-document.getElementById('results').onclick = e => {
+$('results').onclick = e => {
   const id = e.target.dataset.add;
   if (!id) return;
   const m = results.find(x => x.id == id);
   lib[id] = {
-    id: m.id, title: m.title.english || m.title.romaji, cover: m.coverImage?.medium || '',
+    id: m.id, title: titleOf(m), cover: m.coverImage?.large || '',
     chapters: m.chapters || null, status: e.target.previousElementSibling.value,
     progress: 0, score: 0, notes: '', updated: Date.now(),
   };
@@ -124,39 +222,46 @@ document.getElementById('results').onclick = e => {
   renderResults();
 };
 
-// --- Library ---
+// --- Shelf ---
 function render() {
   const all = Object.values(lib);
   const count = s => all.filter(m => m.status === s).length;
-  document.getElementById('tabs').innerHTML =
-    [...Object.entries(STATUSES), ['all', 'All']].map(([k, v]) =>
-      `<button data-tab="${k}" aria-pressed="${k === tab}">${v} (${k === 'all' ? all.length : count(k)})</button>`).join('');
+  $('tabs').innerHTML = [...Object.entries(STATUSES), ['all', 'All']].map(([k, v]) =>
+    `<button data-tab="${k}" aria-pressed="${k === tab}">${v}<span class="n">${k === 'all' ? all.length : count(k)}</span></button>`).join('');
 
   const scored = all.filter(m => m.score > 0);
-  const chapters = all.reduce((n, m) => n + (m.progress || 0), 0);
   const mean = scored.length ? (scored.reduce((n, m) => n + m.score, 0) / scored.length).toFixed(1) : '–';
-  document.getElementById('stats').textContent = `${all.length} titles · ${chapters} chapters read · mean score ${mean}`;
+  $('stats').innerHTML = [
+    [all.length, 'Titles'], [all.reduce((n, m) => n + (m.progress || 0), 0), 'Chapters read'],
+    [count('completed'), 'Completed'], [mean, 'Mean score'],
+  ].map(([n, l]) => `<div class="stat"><b>${n}</b><small>${l}</small></div>`).join('');
 
   const list = all.filter(m => tab === 'all' || m.status === tab).sort((a, b) => b.updated - a.updated);
-  document.getElementById('library').innerHTML = list.length ? list.map(m => `
-    <div class="item" data-id="${m.id}">
-      <img src="${esc(m.cover)}" alt="" loading="lazy">
-      <div class="body">
-        <div class="title">${esc(m.title)}</div>
-        <div class="row">
-          <select data-f="status" aria-label="Status">${statusOpts(m.status)}</select>
-          <select data-f="score" aria-label="Score">${Array.from({length: 11}, (_, i) =>
-            `<option value="${i}" ${i === m.score ? 'selected' : ''}>${i ? '★ ' + i : 'No score'}</option>`).join('')}</select>
-        </div>
-        <div class="row">
-          <label class="meta">Ch <input type="number" data-f="progress" min="0" ${m.chapters ? `max="${m.chapters}"` : ''} value="${m.progress}"></label>
-          <span class="meta">/ ${m.chapters || '?'}</span>
-          <button data-act="inc" aria-label="Read one more chapter">+1</button>
-        </div>
-        <details><summary class="meta">Notes</summary><textarea data-f="notes" aria-label="Notes">${esc(m.notes)}</textarea></details>
-        <div class="row"><button data-act="remove">Remove</button></div>
+  $('library').innerHTML = list.length ? list.map(m => {
+    const pct = m.chapters ? Math.round(100 * m.progress / m.chapters) : 0;
+    return `
+    <div class="card" data-id="${m.id}">
+      ${cover(m.cover, m.title, chip(m.status) + (m.chapters ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''))}
+      <div class="title">${esc(m.title)}</div>
+      <div class="row">
+        <span class="meta grow">Ch ${m.progress} / ${m.chapters || '?'}${m.score ? ` · ★ ${m.score}` : ''}</span>
+        <button class="primary" data-act="inc" aria-label="Mark next chapter read">+1</button>
       </div>
-    </div>`).join('') : '<div class="empty">Nothing here yet. Search above to add manga.</div>';
+      <details class="edit">
+        <summary>Edit</summary>
+        <div class="edit-body">
+          <label>Status<select data-f="status">${statusOpts(m.status)}</select></label>
+          <label>Chapter<input type="number" data-f="progress" min="0" ${m.chapters ? `max="${m.chapters}"` : ''} value="${m.progress}"></label>
+          <label>Score<select data-f="score">${Array.from({length: 11}, (_, i) =>
+            `<option value="${i}" ${i === m.score ? 'selected' : ''}>${i ? '★ ' + i : 'No score'}</option>`).join('')}</select></label>
+          <label>Notes<textarea data-f="notes">${esc(m.notes)}</textarea></label>
+          <button class="danger" data-act="remove">Remove from shelf</button>
+        </div>
+      </details>
+    </div>`;
+  }).join('') : `<div class="empty">${all.length
+    ? `Nothing in “${tab === 'all' ? 'All' : STATUSES[tab]}” yet.`
+    : 'Your shelf is empty. Search for a manga above to add your first one.'}</div>`;
 }
 
 function setProgress(m, n) {
@@ -167,11 +272,12 @@ function setProgress(m, n) {
   else if (n > 0 && m.status === 'planning') m.status = 'reading';
 }
 
-document.getElementById('tabs').onclick = e => {
-  if (e.target.dataset.tab) { tab = e.target.dataset.tab; render(); }
+$('tabs').onclick = e => {
+  const b = e.target.closest('[data-tab]');
+  if (b) { tab = b.dataset.tab; render(); }
 };
 
-const libEl = document.getElementById('library');
+const libEl = $('library');
 libEl.onchange = e => {
   const m = lib[e.target.closest('[data-id]')?.dataset.id];
   const f = e.target.dataset.f;
@@ -187,25 +293,25 @@ libEl.onclick = e => {
   const m = act && lib[e.target.closest('[data-id]').dataset.id];
   if (!m) return;
   if (act === 'inc') setProgress(m, m.progress + 1);
-  if (act === 'remove') { if (!confirm(`Remove "${m.title}"?`)) return; delete lib[m.id]; }
+  if (act === 'remove') { if (!confirm(`Remove "${m.title}" from your shelf?`)) return; delete lib[m.id]; }
   else m.updated = Date.now();
   save();
 };
 
 // --- Backup ---
-document.getElementById('exportBtn').onclick = () => {
+$('exportBtn').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(lib, null, 2)], { type: 'application/json' }));
   a.download = 'manga-shelf.json';
   a.click();
 };
-document.getElementById('importFile').onchange = async e => {
+$('importFile').onchange = async e => {
   try {
     const data = JSON.parse(await e.target.files[0].text());
     const ok = data && typeof data === 'object' && Object.values(data).every(m =>
       m && typeof m.title === 'string' && m.status in STATUSES && Number.isFinite(m.progress));
-    if (!ok) throw new Error('not a Manga Shelf export');
-    if (confirm(`Import ${Object.keys(data).length} titles? Existing entries with the same id are replaced.`)) {
+    if (!ok) throw new Error('this is not a Manga Shelf export');
+    if (confirm(`Import ${Object.keys(data).length} titles? Entries already on your shelf will be replaced.`)) {
       Object.assign(lib, data);
       save();
     }
