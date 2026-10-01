@@ -1,7 +1,7 @@
 import { html, useState } from '../../vendor/preact-htm.js';
 import * as db from '../data/db.js';
 import { feed, stats } from '../data/selectors.js';
-import { UserAvatar, SpineShelf, ActivityCard, ListCard, ReviewCard, StatsCard, Tabs, Icon, EmptyState } from '../components.js';
+import { UserAvatar, SpineShelf, ActivityCard, ListCard, ReviewCard, StatsCard, Tabs, Icon, EmptyState, InviteButton } from '../components.js';
 import { openModal, toast } from '../ui.js';
 import { userHref, mangaHref } from '../router.js';
 import { fmtDate } from '../util.js';
@@ -35,7 +35,8 @@ export function Profile({ username, tab = 'activity' }) {
         </div>
       </div>
       <div class="profile-actions">
-        ${mine ? html`<button class="btn" onClick=${() => openModal('profile')}><${Icon} name="edit" size=${16} /> Edit profile</button>`
+        ${mine ? html`<div class="row"><button class="btn" onClick=${() => openModal('profile')}><${Icon} name="edit" size=${16} /> Edit profile</button>
+            ${db.online && html`<${InviteButton} user=${u} />`}</div>`
           : html`<${FollowButton} user=${u} />`}
       </div>
     </header>
@@ -67,12 +68,17 @@ export function Profile({ username, tab = 'activity' }) {
       ${tab === 'reviews' && (reviews.length ? html`<div class="stack">${reviews.map(r => html`<${ReviewCard} key=${r.id} review=${r} />`)}</div>` : html`<${EmptyState} title="No reviews yet" />`)}
       ${tab === 'people' && html`<div class="people">
         ${following.map(id => html`<${PersonRow} key=${id} user=${s.users[id]} />`)}
-        ${!following.length && html`<${EmptyState} title="Not following anyone yet" />`}
+        ${!following.length && html`<${EmptyState} title="Not following anyone yet"
+          action=${mine && db.online && html`<${InviteButton} user=${u} label="Copy your profile link to share" />`}>
+          ${mine ? 'Search for friends by username, or send them your profile link.' : ''}<//>`}
         ${mine && suggestions.length > 0 && html`<h2 class="sub">Readers you might like</h2>${suggestions.map(x => html`<${PersonRow} key=${x.id} user=${x} />`)}`}
       </div>`}
     </div>
 
-    ${mine && html`<footer class="danger-zone small muted">
+    ${mine && db.online && html`<footer class="danger-zone small muted">
+      Signed in as @${u.username}. <button class="btn small" onClick=${() => db.signOut()}>Sign out</button>
+    </footer>`}
+    ${mine && !db.online && html`<footer class="danger-zone small muted">
       This prototype keeps your data in this browser.
       ${confirmReset ? html` Reset everything to the sample data? <button class="btn small danger" onClick=${() => { db.resetAll(); setConfirmReset(false); toast('Sample data restored'); }}>Yes, reset</button>
           <button class="btn small ghost" onClick=${() => setConfirmReset(false)}>Cancel</button>`

@@ -388,6 +388,17 @@ export function ListCard({ list }) {
   </a>`;
 }
 
+// ---------- InviteButton ----------
+/** Copies a link to a profile, the way friends find each other. */
+export function InviteButton({ user, label = 'Copy profile link' }) {
+  const url = location.origin + location.pathname + '#/user/' + encodeURIComponent(user.username);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); toast('Link copied. Send it to a friend so they can follow you.'); }
+    catch { toast(`Your profile link: ${url}`); }
+  };
+  return html`<button class="btn" onClick=${copy}><${Icon} name="globe" size=${16} /> ${label}</button>`;
+}
+
 // ---------- StatsCard ----------
 export const StatsCard = ({ label, value, sub }) => html`
   <div class="stat-card"><span class="stat-value">${value}</span><span class="stat-label">${label}</span>${sub && html`<span class="muted small">${sub}</span>`}</div>`;
@@ -410,11 +421,14 @@ export function SearchBar({ autoFocus, onDone }) {
     return () => clearTimeout(t);
   }, [q]);
 
+  const s = q.trim().toLowerCase();
+  const people = s ? Object.values(db.getState().users).filter(u => u.username.includes(s) || u.name.toLowerCase().includes(s)).slice(0, 4) : [];
   const localTitles = new Set(local.manga.map(m => m.title.toLowerCase()));
   const extra = remote.items.filter(m => !localTitles.has(m.title.toLowerCase())).slice(0, 5);
   const options = [
     ...local.manga.map(m => ({ kind: 'manga', m, href: mangaHref(m.id) })),
     ...extra.map(m => ({ kind: 'manga', m, href: mangaHref(m.id), remote: true })),
+    ...people.map(u => ({ kind: 'person', u, href: userHref(u) })),
     ...local.authors.map(a => ({ kind: 'author', label: a, href: link('discover', { author: a }) })),
     ...local.genres.map(g => ({ kind: 'genre', label: g, href: link('discover', { genre: g }) })),
   ];
@@ -428,7 +442,7 @@ export function SearchBar({ autoFocus, onDone }) {
   const showing = open && q.trim();
   return html`<div class="search" onFocusOut=${e => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
     <${Icon} name="search" />
-    <input type="search" value=${q} placeholder="Search manga, authors, genres" aria-label="Search manga, authors and genres"
+    <input type="search" value=${q} placeholder="Search manga, authors, genres, people" aria-label="Search manga, authors, genres and people"
       role="combobox" aria-expanded=${!!showing} aria-controls="search-results" aria-autocomplete="list" autoFocus=${autoFocus}
       aria-activedescendant=${showing && options[active] ? 'opt-' + active : undefined}
       onInput=${e => { setQ(e.target.value); setOpen(true); setActive(0); }} onFocus=${() => setOpen(true)} onKeyDown=${onKey} />
@@ -439,6 +453,8 @@ export function SearchBar({ autoFocus, onDone }) {
           <${MangaCover} manga=${o.m} size="thumb" stamp=${false} />
           <span class="sugg-main"><b>${o.m.title}</b><span class="muted small">${o.m.authors[0] || 'Unknown author'} · ${o.m.start || '?'} · ${PUB_STATUS[o.m.status]}</span></span>
           ${o.remote && html`<span class="pill">AniList</span>`}`
+        : o.kind === 'person' ? html`<${UserAvatar} user=${o.u} size=${34} link=${false} />
+          <span class="sugg-main"><b>${o.u.name}</b><span class="muted small">@${o.u.username} · reader</span></span>`
         : html`<span class="sugg-ico"><${Icon} name=${o.kind === 'author' ? 'user' : 'compass'} /></span>
           <span class="sugg-main"><b>${o.label}</b><span class="muted small">${o.kind === 'author' ? 'Author · see their manga' : 'Genre · browse in Discover'}</span></span>`}
       </a>`)}

@@ -17,15 +17,37 @@ src/modals.js, src/ui.js      dialogs (update progress, review, lists, profile) 
 src/pages/*.js                Home, Discover, Manga detail, Library, Lists, Reviews, Stats, Profile
 src/data/catalog.js           EXTERNAL metadata: mock catalog (titles, authors, genres, chapters…)
 src/data/provider.js          the only code that knows where metadata comes from (mock + AniList GraphQL)
-src/data/db.js                USER data: library, ratings, reviews, lists, follows, activity (localStorage)
-src/data/seed.js              sample readers, reviews and reading history for the prototype
+src/data/db.js                USER data: library, ratings, reviews, lists, follows, activity. Local demo or online
+src/data/remote.js            Supabase adapter: accounts, loading shared data, saving your changes
+src/data/seed.js              sample readers, reviews and reading history for the local demo
+src/config.js                 Supabase URL + key; empty = local demo
+supabase/schema.sql           database tables and row-level security (run once in Supabase)
+src/pages/auth.js             sign in, sign up, password reset
 src/data/selectors.js         derived views: feeds, recommendations, stats
 ```
 
-## Where a backend plugs in
+## Turn on accounts (so friends can see each other)
 
-- **Metadata:** implement `peek / get / list / searchLocal / searchRemote` in `provider.js` against your API. Manga ids are opaque strings; AniList results already use `al-<id>`.
-- **User data:** every write goes through an action in `db.js` (`setStatus`, `setProgress`, `saveReview`, `toggleFollow`, `createList`…). Replace their bodies with API calls; the UI only calls these.
-- **Accounts:** `state.session.userId` is the signed-in user. A login flow only needs to set it and load that user's data.
+Without configuration the app runs as a local demo with sample readers. To make it real:
 
-On the live site the app fetches real cover art and live search results from AniList in the browser. Offline, or if AniList is unreachable, it falls back to generated covers and local search.
+1. Create a free project at [supabase.com](https://supabase.com).
+2. In the project, open **SQL Editor**, paste all of `supabase/schema.sql`, and run it.
+3. Open **Authentication → URL Configuration**. Set **Site URL** to `https://camilledaisy.github.io/manga/` and add the same address under **Redirect URLs**. Confirmation and password-reset emails link back here.
+4. Open **Project Settings → API** (called **API Keys** in newer dashboards). Copy the **Project URL** and the **anon** (or **publishable**) key into `src/config.js`, then commit and push.
+5. Open the site, create your account, and send friends your profile link (Profile → Copy profile link). They sign up, follow you, and see your reading.
+
+Both values in `config.js` are designed to be public. What each person can read and write is enforced by the database's row-level security:
+
+- Anyone signed in can see profiles, libraries, ratings, reviews, comments, follows, activity and public lists.
+- Only you can change your own rows.
+- Private notes and private lists are visible to their owner only.
+- Signed-out visitors see nothing.
+
+Supabase's built-in email sender only allows a few emails per hour. That's fine for a handful of friends; for more, connect your own SMTP under Authentication → Emails, or turn off **Confirm email** under Authentication → Sign In / Providers → Email.
+
+## How data flows
+
+- **Metadata** (titles, covers, chapters) comes from `provider.js`: the mock catalog plus AniList. Manga found through AniList search are saved to the shared `manga_cache` table so friends' browsers can show them too.
+- **User data** changes only through actions in `db.js` (`setStatus`, `setProgress`, `saveReview`, `toggleFollow`, `createList`…). In online mode each action is applied instantly on screen, then `remote.js` compares the state before and after and writes just the rows that changed. Writes are saved in order, Undo is saved the same way, and a failed save reloads your data from the server.
+- **Friends' updates** load at sign-in, whenever you come back to the tab, and every minute while it's open. A refresh never overwrites a change that's still saving.
+- At sign-in the app loads every shared row. That suits a group of friends; past roughly a thousand rows per table, scope the queries to people you follow and paginate (see the `ponytail:` note in `remote.js`).

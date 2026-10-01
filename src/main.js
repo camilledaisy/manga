@@ -13,6 +13,7 @@ import { Lists, ListDetail } from './pages/lists.js';
 import { Reviews } from './pages/reviews.js';
 import { Stats } from './pages/stats.js';
 import { Profile } from './pages/profile.js';
+import { AuthScreen } from './pages/auth.js';
 
 const NAV = [
   ['', 'Home', 'home'], ['discover', 'Discover', 'compass'], ['library', 'My Library', 'books'], ['lists', 'Lists', 'list'],
@@ -96,4 +97,22 @@ function App() {
     <${ModalHost} /><${Toasts} />`;
 }
 
-render(html`<${App} />`, document.getElementById('app'));
+// Accounts gate (online mode only): sign-in screen until there's a session, then the app.
+function Root() {
+  db.useDb();
+  const status = db.getStatus();
+  useEffect(() => { db.start(); }, []);
+  useEffect(() => {
+    if (status !== 'ready' || !db.online) return;
+    const pull = () => document.visibilityState === 'visible' && db.refresh();
+    const t = setInterval(pull, 60e3);
+    addEventListener('focus', pull);
+    return () => { clearInterval(t); removeEventListener('focus', pull); };
+  }, [status]);
+  if (status === 'ready') return html`<${App} />`;
+  if (status === 'signedOut' || status === 'recovery') return html`<${AuthScreen} recovery=${status === 'recovery'} key=${status} /><${Toasts} />`;
+  if (status === 'error') return html`<div class="page"><${ErrorState} message=${`Couldn't reach your shelf: ${db.getStatusError()}`} onRetry=${() => location.reload()} /></div>`;
+  return html`<p class="boot">Opening your shelf…</p>`;
+}
+
+render(html`<${Root} />`, document.getElementById('app'));

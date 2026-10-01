@@ -588,3 +588,14 @@ dialog[open] { animation: rise .2s ease-out; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .card-tile:hover .cover, .spine:hover { transform: none; }
 }
+
+/* ---------- sign in ---------- */
+.auth { min-height: 100dvh; display: grid; place-items: center; padding: 32px var(--gutter);
+  background-image: radial-gradient(var(--line-2) .8px, transparent 1.2px); background-size: 9px 9px; }
+.auth-card { width: min(420px, 100%); display: grid; gap: 12px; padding: 32px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.auth-card h1 { font-size: 30px; font-weight: 800; }
+.auth-form { display: grid; gap: 14px; margin-top: 8px; }
+.auth-error { color: var(--hanko); font-size: 14px; }
+.auth-sent { padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); line-height: 1.5; }
+.auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 4px; color: var(--muted); }

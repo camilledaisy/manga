@@ -3,7 +3,7 @@ import * as db from '../data/db.js';
 import { CATALOG } from '../data/catalog.js';
 import { peek } from '../data/provider.js';
 import { libraryItems, feed, recommendFor, totalOf } from '../data/selectors.js';
-import { MangaShelf, MangaCover, ActivityCard, EmptyState, Icon, ProgressBar, plusOne, progressText } from '../components.js';
+import { MangaShelf, MangaCover, ActivityCard, EmptyState, Icon, ProgressBar, plusOne, progressText, InviteButton } from '../components.js';
 import { openModal } from '../ui.js';
 import { mangaHref } from '../router.js';
 import { relTime } from '../util.js';
@@ -43,13 +43,15 @@ export function Home() {
     <div class="two-col">
       <section>
         <header class="section-head"><h2>Your Recent Activity</h2><a class="see-all" href="#/profile">Profile</a></header>
-        <div class="feed">${feed([u.id], 7).map(a => html`<${ActivityCard} key=${a.id} activity=${a} showUser=${false} />`)}</div>
+        <div class="feed">${feed([u.id], 7).length ? feed([u.id], 7).map(a => html`<${ActivityCard} key=${a.id} activity=${a} showUser=${false} />`)
+          : html`<${EmptyState} title="Nothing logged yet">Add a manga and press +1 as you read. Your progress, ratings and reviews show up here.<//>`}</div>
       </section>
       <section>
         <header class="section-head"><h2>Friends' Activity</h2><a class="see-all" href="#/reviews">Reviews</a></header>
         <div class="feed">${(s.follows[u.id] || []).length
           ? feed(s.follows[u.id], 9).map(a => html`<${ActivityCard} key=${a.id} activity=${a} />`)
-          : html`<${EmptyState} title="You're not following anyone yet">Follow readers from their profiles to see what they're reading.<//>`}</div>
+          : html`<${EmptyState} title="You're not following anyone yet" action=${db.online && html`<${InviteButton} user=${u} label="Invite a friend" />`}>
+              Search for friends by username, or send them your profile link. Their reading shows up here.<//>`}</div>
       </section>
     </div>
   </div>`;

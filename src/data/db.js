@@ -1,22 +1,36 @@
 // USER-GENERATED data store: library, ratings, reviews, lists, follows, activity.
-// The prototype "backend" is localStorage. Every write goes through an action below,
-// so moving to a real API means re-implementing these functions, not touching the UI.
-// `state.session.userId` is the signed-in user; auth only needs to set it.
+// Every write goes through an action below, so the UI never talks to storage directly.
+// Two backends:
+//   local demo (no config): sample readers, everything in this browser's localStorage
+//   online (src/config.js filled in): Supabase accounts; each action is diffed and saved by remote.js
+// `state.session.userId` is the signed-in user.
 import { useEffect, useState } from '../../vendor/preact-htm.js';
 import { seed } from './seed.js';
 import * as provider from './provider.js';
+import * as remote from './remote.js';
 
 const KEY = 'mangashelf:db:v1';
 const LEGACY_KEY = 'manga-shelf';   // the first single-page version of this app
+const LEGACY_DONE = 'mangashelf:legacy-imported';
 const MERGE_WINDOW = 30 * 60e3;     // consecutive +1s within 30 min become one "read chapters 84–87" entry
 export const FAVORITES_MAX = 10;
 
 export const STATUSES = { reading: 'Currently Reading', planning: 'Want to Read', completed: 'Completed', paused: 'On Hold', dropped: 'Dropped' };
 export const SHORT_STATUS = { ...STATUSES, reading: 'Reading' };
 
-let state = load();
+export const online = remote.enabled;
+let state = online ? null : load();
 let undoState = null;
+// 'ready' | 'loading' | 'signedOut' | 'recovery' (setting a new password) | 'error'
+let status = online ? 'loading' : 'ready';
+let statusError = '';
+let recovering = false;
+let version = 0;      // bumps on every local change, so a slow refresh never overwrites newer edits
+let saving = 0;       // writes still on their way to the server
+let queue = Promise.resolve();
 const listeners = new Set();
+const notify = (e) => listeners.forEach(f => f(e));
+const newId = (p) => p + '_' + (crypto.randomUUID?.() ?? Date.now().toString(36) + Math.random().toString(36).slice(2));
 
 function load() {
   let s;
@@ -27,10 +41,11 @@ function load() {
   return s;
 }
 
+/** Imports the shelf saved by the first version of the app, once per browser. */
 function migrateLegacy(s) {
   let old;
-  try { old = JSON.parse(localStorage.getItem(LEGACY_KEY)); } catch { return; }
-  if (!old || s.migratedLegacy) return;
+  try { old = JSON.parse(localStorage.getItem(LEGACY_KEY)); if (localStorage.getItem(LEGACY_DONE)) return false; } catch { return false; }
+  if (!old || s.migratedLegacy) return false;
   const lib = s.library[s.session.userId];
   for (const e of Object.values(old)) {
     if (!e || typeof e.title !== 'string' || !(e.status in STATUSES)) continue;
@@ -42,29 +57,98 @@ function migrateLegacy(s) {
       addedAt: e.updated || Date.now(), updatedAt: e.updated || Date.now(), startedAt: null, completedAt: null };
   }
   s.migratedLegacy = true;
+  if (s.online) try { localStorage.setItem(LEGACY_DONE, '1'); } catch { /* imports again next time; entries are not duplicated */ }
+  return true;
 }
 
 function persist() {
+  if (state?.online) return;   // online data lives on the server
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
-  catch { listeners.forEach(f => f({ error: 'Could not save. Your browser storage may be full or blocked.' })); }
+  catch { notify({ error: 'Could not save. Your browser storage may be full or blocked.' }); }
 }
 
-function commit(next, undoable = false) {
-  undoState = undoable ? state : null;
+function apply(next, undoable = false) {
+  const prev = state;
+  undoState = undoable ? prev : null;
   state = next;
+  version++;
   persist();
-  listeners.forEach(f => f());
+  if (next.online) save(prev, next);
+  notify();
+}
+
+function save(prev, next) {
+  saving++;
+  queue = queue.then(() => remote.push(prev, next))
+    .catch(e => { notify({ error: `Couldn't save your change (${e.message}). Reloading your data.` }); return refresh(true); })
+    .finally(() => { saving--; });
 }
 
 function mutate(fn, undoable) {
   const next = structuredClone(state);
   const out = fn(next, next.session.userId, next.library[next.session.userId]);
-  commit(next, undoable);
+  apply(next, undoable);
   return out;
 }
 
 /** Restores the state before the last undoable action (+1, status change, removal). */
-export function undo() { if (undoState) { state = undoState; undoState = null; persist(); listeners.forEach(f => f()); } }
+export function undo() { if (undoState) { const u = undoState; apply(u); } }
+
+// ---------- accounts (online mode) ----------
+export const getStatus = () => status;
+export const getStatusError = () => statusError;
+const setStatus_ = (s, err = '') => { status = s; statusError = err; notify(); };
+
+export async function start() {
+  if (!online) return;
+  try {
+    // Supabase warns against awaiting its calls inside this callback, hence the setTimeout.
+    await remote.onAuth((event, s) => {
+      if (event === 'PASSWORD_RECOVERY') recovering = true;   // set synchronously: start() checks it right after
+      setTimeout(() => {
+        if (event === 'PASSWORD_RECOVERY') setStatus_('recovery');
+        else if (event === 'SIGNED_OUT') { state = null; setStatus_('signedOut'); }
+        else if (event === 'SIGNED_IN' && s && status === 'signedOut' && !recovering) open(s.user);
+      });
+    });
+    const s = await remote.session();
+    if (recovering) return setStatus_('recovery');
+    s ? await open(s.user) : setStatus_('signedOut');
+  } catch (e) { setStatus_('error', e.message); }
+}
+
+/** Called after a new password is saved from a reset link. */
+export async function finishRecovery() {
+  recovering = false;
+  const s = await remote.session();
+  s ? await open(s.user) : setStatus_('signedOut');
+}
+
+async function open(user) {
+  setStatus_('loading');
+  try {
+    state = await remote.loadAll(user);
+    version++;
+    setStatus_('ready');
+    const next = structuredClone(state);
+    if (migrateLegacy(next)) apply(next);
+  } catch (e) { setStatus_('error', e.message); }
+}
+
+/** Pulls friends' latest changes. Skipped while your own edits are saving. */
+export async function refresh(force = false) {
+  if (!state?.online || (!force && saving)) return;
+  const v = version;
+  try {
+    const s = await remote.session();
+    if (!s) return setStatus_('signedOut');
+    const next = await remote.loadAll(s.user);
+    if (force || version === v) { state = next; undoState = null; notify(); }
+  } catch { /* offline for a moment: keep what we have */ }
+}
+
+export const signOut = () => remote.signOut();
+export const backend = remote;
 
 export const getState = () => state;
 export function subscribe(f) { listeners.add(f); return () => listeners.delete(f); }
@@ -94,7 +178,7 @@ function log(s, uid, a) {
     return;
   }
   if (same && (a.type === 'rating' || a.type === 'status')) { Object.assign(last, a, { at: now }); return; }
-  s.activity.unshift({ id: 'a_' + now.toString(36) + Math.random().toString(36).slice(2, 6), userId: uid, at: now, ...a });
+  s.activity.unshift({ id: newId('a'), userId: uid, at: now, ...a });
 }
 
 // ---------- library ----------
@@ -189,7 +273,7 @@ export function saveReview({ mangaId, rating, body, spoiler }) {
     let r = s.reviews.find(x => x.mangaId === mangaId && x.userId === uid);
     if (r) Object.assign(r, { rating, body, spoiler, editedAt: Date.now() });
     else {
-      s.reviews.unshift({ id: 'r_' + Date.now().toString(36), userId: uid, mangaId, rating, body, spoiler, createdAt: Date.now(), likes: [], comments: [] });
+      s.reviews.unshift({ id: newId('r'), userId: uid, mangaId, rating, body, spoiler, createdAt: Date.now(), likes: [], comments: [] });
       log(s, uid, { type: 'review', mangaId, rating });
     }
     if (rating) { const e = ensureEntry(s, uid, lib, mangaId); e.rating = rating; e.updatedAt = Date.now(); }
@@ -210,7 +294,7 @@ export function toggleLike(reviewId) {
 
 export function addComment(reviewId, body) {
   mutate((s, uid) => {
-    s.reviews.find(x => x.id === reviewId).comments.push({ id: 'c_' + Date.now().toString(36), userId: uid, body, createdAt: Date.now() });
+    s.reviews.find(x => x.id === reviewId).comments.push({ id: newId('c'), userId: uid, body, createdAt: Date.now() });
   });
 }
 
@@ -231,7 +315,7 @@ export function updateProfile(patch) {
 // ---------- lists ----------
 export function createList({ title, description = '', isPublic = true, mangaIds = [] }) {
   return mutate((s, uid) => {
-    const id = 'l_' + Date.now().toString(36);
+    const id = newId('l');
     s.lists.unshift({ id, userId: uid, title, description, public: isPublic, mangaIds, createdAt: Date.now(), updatedAt: Date.now() });
     if (isPublic) log(s, uid, { type: 'list', listId: id, title });
     return id;
@@ -259,4 +343,4 @@ export function moveInList(id, from, to) {
 }
 
 /** Wipes local data back to the sample data (Profile → Reset). */
-export function resetAll() { const s = seed(); s.migratedLegacy = true; commit(s); }
+export function resetAll() { const s = seed(); s.migratedLegacy = true; apply(s); }
