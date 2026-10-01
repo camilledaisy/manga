@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manga Shelf</title>
+<style>
+  :root { --bg:#f6f6f8; --card:#fff; --fg:#1b1b1f; --muted:#6b6b76; --line:#e2e2e8; --accent:#3b6cf6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121216; --card:#1c1c22; --fg:#ececf1; --muted:#9a9aa6; --line:#2c2c35; --accent:#7a9cff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.4 system-ui, sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:16px; }
+  h1 { margin:0 0 12px; font-size:22px; }
+  input, select, button, textarea { font:inherit; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  form.search { display:flex; gap:8px; margin-bottom:12px; }
+  form.search input { flex:1; min-width:0; }
+  nav { display:flex; flex-wrap:wrap; gap:6px; margin:16px 0 8px; }
+  nav button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .stats { color:var(--muted); font-size:13px; margin-bottom:12px; }
+  .grid { display:grid; gap:10px; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); }
+  .item { display:flex; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px; }
+  .item img { width:64px; height:92px; object-fit:cover; border-radius:4px; flex:none; background:var(--line); }
+  .item .body { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
+  .item .title { font-weight:600; overflow-wrap:anywhere; }
+  .item .meta { color:var(--muted); font-size:13px; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .row input[type=number] { width:70px; }
+  textarea { width:100%; min-height:50px; resize:vertical; }
+  .empty { color:var(--muted); padding:24px 0; }
+  footer { margin-top:24px; display:flex; gap:8px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Manga Shelf</h1>
+
+  <form class="search" id="searchForm">
+    <input id="q" type="search" placeholder="Search manga on AniList…" aria-label="Search manga">
+    <button class="primary">Search</button>
+  </form>
+  <div id="results" class="grid"></div>
+
+  <nav id="tabs" aria-label="Filter by status"></nav>
+  <div class="stats" id="stats"></div>
+  <div id="library" class="grid"></div>
+
+  <footer>
+    <button id="exportBtn">Export JSON</button>
+    <label><button type="button" onclick="this.nextElementSibling.click()">Import JSON</button><input id="importFile" type="file" accept="application/json" hidden></label>
+  </footer>
+</main>
+
+<script>
+const STATUSES = { reading:'Reading', planning:'Plan to read', completed:'Completed', paused:'Paused', dropped:'Dropped' };
+const KEY = 'manga-shelf';
+let lib = load();
+let tab = 'reading';
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(lib)); } catch (e) { alert('Could not save: ' + e.message); }
+  render();
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const statusOpts = cur => Object.entries(STATUSES).map(([k, v]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${v}</option>`).join('');
+
+// --- AniList search ---
+const QUERY = `query($q:String){Page(perPage:20){media(search:$q,type:MANGA,sort:SEARCH_MATCH){
+  id title{romaji english} coverImage{medium} chapters startDate{year} status }}}`;
+let results = [];
+
+document.getElementById('searchForm').onsubmit = async e => {
+  e.preventDefault();
+  const q = document.getElementById('q').value.trim();
+  const box = document.getElementById('results');
+  if (!q) { results = []; box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="empty">Searching…</div>';
+  try {
+    const r = await fetch('https://graphql.anilist.co', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query: QUERY, variables: { q } }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    results = (await r.json()).data.Page.media;
+    renderResults();
+  } catch (err) {
+    box.innerHTML = `<div class="empty">Search failed: ${esc(err.message)}</div>`;
+  }
+};
+
+function renderResults() {
+  const box = document.getElementById('results');
+  box.innerHTML = results.length ? results.map(m => `
+    <div class="item">
+      <img src="${esc(m.coverImage?.medium)}" alt="" loading="lazy">
+      <div class="body">
+        <div class="title">${esc(m.title.english || m.title.romaji)}</div>
+        <div class="meta">${esc(m.startDate?.year || '?')} · ${m.chapters ? m.chapters + ' ch' : 'ongoing'}</div>
+        <div class="row">${lib[m.id]
+          ? `<span class="meta">On your shelf: ${STATUSES[lib[m.id].status]}</span>`
+          : `<select aria-label="Status">${statusOpts('planning')}</select>
+             <button class="primary" data-add="${m.id}">Add</button>`}
+        </div>
+      </div>
+    </div>`).join('') : '<div class="empty">No results.</div>';
+}
+
+document.getElementById('results').onclick = e => {
+  const id = e.target.dataset.add;
+  if (!id) return;
+  const m = results.find(x => x.id == id);
+  lib[id] = {
+    id: m.id, title: m.title.english || m.title.romaji, cover: m.coverImage?.medium || '',
+    chapters: m.chapters || null, status: e.target.previousElementSibling.value,
+    progress: 0, score: 0, notes: '', updated: Date.now(),
+  };
+  save();
+  renderResults();
+};
+
+// --- Library ---
+function render() {
+  const all = Object.values(lib);
+  const count = s => all.filter(m => m.status === s).length;
+  document.getElementById('tabs').innerHTML =
+    [...Object.entries(STATUSES), ['all', 'All']].map(([k, v]) =>
+      `<button data-tab="${k}" aria-pressed="${k === tab}">${v} (${k === 'all' ? all.length : count(k)})</button>`).join('');
+
+  const scored = all.filter(m => m.score > 0);
+  const chapters = all.reduce((n, m) => n + (m.progress || 0), 0);
+  const mean = scored.length ? (scored.reduce((n, m) => n + m.score, 0) / scored.length).toFixed(1) : '–';
+  document.getElementById('stats').textContent = `${all.length} titles · ${chapters} chapters read · mean score ${mean}`;
+
+  const list = all.filter(m => tab === 'all' || m.status === tab).sort((a, b) => b.updated - a.updated);
+  document.getElementById('library').innerHTML = list.length ? list.map(m => `
+    <div class="item" data-id="${m.id}">
+      <img src="${esc(m.cover)}" alt="" loading="lazy">
+      <div class="body">
+        <div class="title">${esc(m.title)}</div>
+        <div class="row">
+          <select data-f="status" aria-label="Status">${statusOpts(m.status)}</select>
+          <select data-f="score" aria-label="Score">${Array.from({length: 11}, (_, i) =>
+            `<option value="${i}" ${i === m.score ? 'selected' : ''}>${i ? '★ ' + i : 'No score'}</option>`).join('')}</select>
+        </div>
+        <div class="row">
+          <label class="meta">Ch <input type="number" data-f="progress" min="0" ${m.chapters ? `max="${m.chapters}"` : ''} value="${m.progress}"></label>
+          <span class="meta">/ ${m.chapters || '?'}</span>
+          <button data-act="inc" aria-label="Read one more chapter">+1</button>
+        </div>
+        <details><summary class="meta">Notes</summary><textarea data-f="notes" aria-label="Notes">${esc(m.notes)}</textarea></details>
+        <div class="row"><button data-act="remove">Remove</button></div>
+      </div>
+    </div>`).join('') : '<div class="empty">Nothing here yet. Search above to add manga.</div>';
+}
+
+function setProgress(m, n) {
+  n = Math.max(0, Math.floor(Number(n) || 0));
+  if (m.chapters) n = Math.min(n, m.chapters);
+  m.progress = n;
+  if (m.chapters && n === m.chapters) m.status = 'completed';
+  else if (n > 0 && m.status === 'planning') m.status = 'reading';
+}
+
+document.getElementById('tabs').onclick = e => {
+  if (e.target.dataset.tab) { tab = e.target.dataset.tab; render(); }
+};
+
+const libEl = document.getElementById('library');
+libEl.onchange = e => {
+  const m = lib[e.target.closest('[data-id]')?.dataset.id];
+  const f = e.target.dataset.f;
+  if (!m || !f) return;
+  if (f === 'progress') setProgress(m, e.target.value);
+  else if (f === 'score') m.score = Number(e.target.value);
+  else m[f] = e.target.value;
+  m.updated = Date.now();
+  save();
+};
+libEl.onclick = e => {
+  const act = e.target.dataset.act;
+  const m = act && lib[e.target.closest('[data-id]').dataset.id];
+  if (!m) return;
+  if (act === 'inc') setProgress(m, m.progress + 1);
+  if (act === 'remove') { if (!confirm(`Remove "${m.title}"?`)) return; delete lib[m.id]; }
+  else m.updated = Date.now();
+  save();
+};
+
+// --- Backup ---
+document.getElementById('exportBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(lib, null, 2)], { type: 'application/json' }));
+  a.download = 'manga-shelf.json';
+  a.click();
+};
+document.getElementById('importFile').onchange = async e => {
+  try {
+    const data = JSON.parse(await e.target.files[0].text());
+    const ok = data && typeof data === 'object' && Object.values(data).every(m =>
+      m && typeof m.title === 'string' && m.status in STATUSES && Number.isFinite(m.progress));
+    if (!ok) throw new Error('not a Manga Shelf export');
+    if (confirm(`Import ${Object.keys(data).length} titles? Existing entries with the same id are replaced.`)) {
+      Object.assign(lib, data);
+      save();
+    }
+  } catch (err) { alert('Import failed: ' + err.message); }
+  e.target.value = '';
+};
+
+render();
+</script>
+</body>
+</html>
